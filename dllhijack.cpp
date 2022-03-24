@@ -1,5 +1,6 @@
 #include "dllhijack.h"
 #include <windows.h>
+#include <tchar.h>
 
 typedef struct _UNICODE_STRING {
 	USHORT Length;
@@ -79,7 +80,7 @@ PEB_LDR_DATA* NtGetPebLdr(void* peb)
 dllname:		被劫持dll的原始名字
 OrigDllPath:	被劫持dll改名后的完整路径
 */
-void SuperDllHijack(LPCWSTR dllname, LPWSTR OrigDllPath)
+void SuperDllHijack(LPTSTR dllname, LPTSTR OrigDllPath)
 {
 	WCHAR wszDllName[100] = { 0 };
 	void* peb = NtCurrentPeb();
@@ -93,9 +94,31 @@ void SuperDllHijack(LPCWSTR dllname, LPWSTR OrigDllPath)
 		memset(wszDllName, 0, 100 * 2);
 		memcpy(wszDllName, data->BaseDllName.Buffer, data->BaseDllName.Length);
 
-		if (!_wcsicmp(wszDllName, dllname)) {
+		if (!_tcsicmp(wszDllName, dllname)) {
 			HMODULE hMod = LoadLibrary(OrigDllPath);
 			data->DllBase = hMod;
+			break;
+		}
+	}
+}
+
+/*
+hinstDLL:		劫持dll的实例
+OrigDllPath:	被劫持dll的实例
+*/
+void SuperDllHijack(HINSTANCE hinstDLL, HMODULE hOrigDllMod)
+{
+	void* peb = NtCurrentPeb();
+	PEB_LDR_DATA* ldr = NtGetPebLdr(peb);
+
+	for (LIST_ENTRY* entry = ldr->InLoadOrderModuleList.Blink;
+		entry != (LIST_ENTRY*)(&ldr->InLoadOrderModuleList);
+		entry = entry->Blink)
+	{
+		PLDR_DATA_TABLE_ENTRY data = (PLDR_DATA_TABLE_ENTRY)entry;
+		if (data->DllBase == (PVOID)hinstDLL)
+		{
+			data->DllBase = hOrigDllMod;
 			break;
 		}
 	}
